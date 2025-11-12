@@ -41,14 +41,6 @@ DOCKER_CONTAINER:=$(addsuffix -$(DOCKER_CAAS), $(DOCKER_LEAD))
 DOCKER_COMPOSE_RUN=$(DOCKER_COMPOSE) run -v --rm
 DOCKER_EXEC_SSH=$(DOCKER) exec -it $(DOCKER_CONTAINER) sh
 
-APPLICATION_UPDATE='npm -u'
-APPLICATION_INSTALL='npm -i'
-APPLICATION_INSTALL_BASE='npm -i [package]'
-APPLICATION_INSTALL_PACKAGES='npm require [package] && \
-composer require [package] --dev && \
-composer require [package] --dev && \
-composer require [package]'
-
 # -------------------------------------------------------------------------------------------------
 #  Help
 # -------------------------------------------------------------------------------------------------
@@ -155,27 +147,32 @@ network:
 	cd docker && $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.network.yml up -d
 
 # -------------------------------------------------------------------------------------------------
-#  Container Application - latest version: laravel/laravel:^10 .
+#  Supervisord services management
 # -------------------------------------------------------------------------------------------------
-.PHONY: app-install app-update app-install-base app-install-packages
+.PHONY: supervisord-conf supervisord-conf-update
 
-app-install: ## installs the latest application dependency packages
-	cd docker && $(DOCKER_EXEC_SSH) -c $(APPLICATION_INSTALL)
+supervisord-conf: ## lists supervisord services set on the running container
+	$(DOCKER) exec -i $(DOCKER_CONTAINER) sh -c 'ls -l /etc/supervisor/conf.d/'
 
-app-upgrade: ## upgrades current application dependency packages - it is recommended to execute this inside the container
-	cd docker && $(DOCKER_EXEC_SSH) -c $(APPLICATION_UPDATE)
-
-app-install-base: ## installs the base framework application
-	cd docker && $(DOCKER_EXEC_SSH) -c $(APPLICATION_INSTALL_BASE)
-
-app-install-packages: ## installs the dependencies packages required from project init
-	cd docker && $(DOCKER_EXEC_SSH) -c $(APPLICATION_INSTALL_PACKAGES)
+supervisord-update: ## updates supervisord services without the need of stoping or rebuilding the container
+	$(DOCKER) cp ./docker/config/supervisor/conf.d/. $(DOCKER_CONTAINER):/etc/supervisor/conf.d/
+	$(MAKE) restart
 
 # -------------------------------------------------------------------------------------------------
-#  Container settings update on the run
+#  Nginx settings management
 # -------------------------------------------------------------------------------------------------
-.PHONY: nginx-conf
+.PHONY: nginx-conf nginx-update nginx-default-conf nginx-default-update
 
-nginx-conf: ## shows NGINX server block on running container
+nginx-conf: ## shows nginx configuration set on the running container
 	$(DOCKER) exec -i $(DOCKER_CONTAINER) sh -c 'cat /etc/nginx/conf.d/default.conf'
+
+nginx-update: ## updates nginx configuration without the need of stoping or rebuilding the container
+	$(DOCKER) cp ./docker/config/nginx/nginx.conf $(DOCKER_CONTAINER):/etc/nginx/conf.d/default.conf
+	$(MAKE) restart
+
+nginx-default-conf: ## shows nginx default server block set on the running container
+	$(DOCKER) exec -i $(DOCKER_CONTAINER) sh -c 'cat /etc/nginx/conf.d/default.conf'
+
+nginx-default-update: ## updates nginx default server block without the need of stoping or rebuilding the container
+	$(DOCKER) cp ./docker/config/nginx/conf.d/default.conf $(DOCKER_CONTAINER):/etc/nginx/conf.d/default.conf
 	$(MAKE) restart
